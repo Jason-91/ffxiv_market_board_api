@@ -53,59 +53,44 @@ app.get('/search-itemname', async (req, res) => {
 
 app.get('/data-centers', async (req, res) => {
     const desiredRegion = req.query.region || 'North-America';
-    let dataCenters, worlds;
 
-    await axios ({
-        method: `get`,
-        url: `/api/v2/data-centers/`,
-        baseURL: `https://universalis.app`
-    })
-    .then((value) => {
-        // console.log("Received response from data-centers endpoint for data centers");
-        // console.log(value);
-        // console.log(value.data);
-        const { data } = value;
-        dataCenters = data.filter(dataCenter => dataCenter.region === desiredRegion);
-        // console.log(dataCenters);
+    try {
+        const [dataCentersResponse, worldsResponse] = await Promise.all([
+            axios.get('/api/v2/data-centers/', { baseURL: 'https://universalis.app' }),
+            axios.get('/api/v2/worlds', { baseURL: 'https://universalis.app' }),
+        ]);
 
-    })
-    .catch((error) => {
-        console.log('Received error response from data-centers endpoint for data centers');
-        result = { message: 'error: failure to fetch data centers' + error };
-    });
+        const dataCenters = dataCentersResponse.data.filter(
+            (dataCenter) => dataCenter.region === desiredRegion
+        );
 
-    await axios ({
-        method: `get`,
-        url: `/api/v2/worlds`,
-        baseURL: `https://universalis.app`
-    })
-    .then((value) => {
-        // console.log("Received response from data-centers endpoint for worlds");
-        // console.log(value);
-        // console.log(value.data);
-        const { data } = value
-        worlds = data
-        // console.log(worlds);
-    })
-    .catch((error) => {
-        console.log('Received error response from data-centers endpoint for worlds');
-        result = { message: 'error: failure to fetch data centers' + error };
-    });
+        const worldsMap = worldsResponse.data.reduce((acc, world) => {
+            acc[world.id] = world.name;
+            return acc;
+        }, {});
 
-    const serverList = dataCenters.map(dataCenter => ({
-        ...dataCenter,
-        worlds: dataCenter.worlds.map(worldId => worlds.find(world => world.id === worldId).name)
-    }));
+        const serverList = dataCenters.map((dataCenter) => ({
+            name: dataCenter.name,
+            region: dataCenter.region,
+            worlds: dataCenter.worlds.map((worldId) => worldsMap[worldId]),
+        }));
 
-    res.json({serverList});
+        res.json({ 
+            status: 'success', 
+            data: { serverList },
+            message: null
+        });
+
+    } catch (error) {
+        console.error('Error fetching data centers:', error);
+        res.status(500).json({ 
+            status: 'error', 
+            message: error.message || 'Failed to fetch data centers',
+            data: null
+        });
+    }
 });
 
 app.listen(port, () => {
     console.log(`Server started on port ${port}`)
 });
-
-
-
-app.get('/search-marketboard', async (req, res) => {
-    const { dataID, dataCenter } = req.query
-})
