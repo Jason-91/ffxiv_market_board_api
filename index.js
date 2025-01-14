@@ -11,43 +11,49 @@ const xivApiPrivateKey = process.env.XIV_API_PRIVATE_KEY;
 
 app.use(cors());
 
-app.get('/search-itemname', async (req, res) => {
-    const item_name = req?.query?.item_name;
-    const isValid = typeof item_name === 'string';
+app.get('/items', async (req, res) => {
+    const itemName = req.query.item;
 
-    if (isValid) {
-        console.log("Attempting to call FFXIV API");
-        await axios ({
-            method: 'get',
-            url: `/search?indexes=item&string=${item_name}&sort_field=LevelItem&sort_order=desc&limit=100&private_keys=${xivApiPrivateKey}`,
-            baseURL: `https://xivapi.com`
-        })
-        .then((value) => {
-            console.log("Received response from item_name endpoint");
-            // console.log(value);
-            // console.log(value.data);
-            // console.log(value.data.Results);
-            const { data } = value;
-            const { Results } = data;
+    if (!itemName) {
+        return res.status(400).json({ message: 'Missing query parameter: item' });
+    }
 
-            res.json({
-                message: 'success',
-                data: Results.map((data) => {
-                    return {
-                        item_id: data.ID,
-                        item_name: data.Name,
-                        item_url: data.Url,
-                        item_icon: data.Icon,
-                    }
-                })
-            })
-        })
-        .catch((error) => {
-            console.log('Received error response from item_name endpoint');
-            res.json({message: 'error: something terrible has happened!...'});
+    if (typeof itemName !== 'string') {
+        return res.status(400).json({ message: 'Invalid query parameter: item (expected string)' });
+    }
+
+    try {
+        const response = await axios.get('https://beta.xivapi.com/api/1/search', {
+            params: {
+                query: `Name~"${itemName}"`,
+                sheets: 'Item',
+            },
+            headers: {
+                Authorization: `Bearer ${xivApiPrivateKey}`,
+            },
         });
-    } else {
-        res.json({ message: `error: invalid query type. Expected string but received ${item_name} type of ${typeof item_name}`});
+
+        // console.log("Full XIV API Response:", response);
+        // console.log("XIV API Response Data:", response.data);
+        // console.log("XIV API Results:", response.data.results);
+
+        if (response.data && response.data.results && response.data.results.length > 0) {
+            const itemFields = response.data.results.map(result => result.fields);
+
+            res.json(itemFields);
+        } else {
+            res.status(404).json({ message: 'No items found matching your search.' });
+        }
+    } catch (error) {
+        console.error('Error fetching data from XIVAPI:', error);
+        if (error.response) {
+            console.error('XIVAPI Response Data:', error.response.data);
+            res.status(error.response.status).json({ message: `XIVAPI Error: ${error.response.status} - ${error.response.data.Message || error.response.data.error || 'Unknown error'}` });
+        } else if (error.request) {
+            res.status(500).json({ message: 'No response from XIVAPI server' });
+        } else {
+            res.status(500).json({ message: 'An unexpected error occurred' });
+        }
     }
 });
 
