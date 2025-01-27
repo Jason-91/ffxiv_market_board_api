@@ -1,4 +1,11 @@
 {
+  "name": "ffxiv-market-board-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
   "dependencies": {
     "axios": "^1.7.9",
     "cors": "^2.8.5",
@@ -7,9 +14,5 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
-  },
-  "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
   }
 }

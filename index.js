@@ -1,8 +1,7 @@
-require('dotenv').config(); 
-
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
+import express from 'express';
+import cors from 'cors';
+import axios from 'axios';
+import 'dotenv/config';
 
 const app = express();
 const port = process.env.PORT || 8000;
@@ -13,44 +12,109 @@ app.use(cors());
 
 app.get('/items', async (req, res) => {
     const itemName = req.query.item;
-
+  
     if (!itemName) {
-        return res.status(400).json({ message: 'Missing query parameter: item' });
+      return res.status(400).json({ message: 'Missing query parameter: item' });
     }
+  
+    try {
+      const response = await axios.get('https://beta.xivapi.com/api/1/search', {
+        params: {
+          query: `Name~"${itemName}"`,
+          sheets: 'Item',
+        },
+        headers: {
+          Authorization: `Bearer ${xivApiPrivateKey}`,
+        },
+      });
+  
+      if (response.data && response.data.results && response.data.results.length > 0) {
+        const itemResults = response.data.results.map(result => ({
+          itemId: result.row_id,
+          ...result.fields,
+        }));
+        console.log(itemResults);
+        res.json(itemResults);
+      } else {
+        res.status(404).json({ message: 'No items found matching your search.' });
+      }
+    } catch (error) {
+      console.error('Error fetching data from XIVAPI:', error);
+      if (error.response) {
+        res.status(error.response.status).json({ message: error.response.data.Message || error.response.data.error || 'Unknown error' });
+      } else if (error.request) {
+        res.status(500).json({ message: 'No response from XIVAPI server' });
+      } else {
+        res.status(500).json({ message: 'An unexpected error occurred' });
+      }
+    }
+  });
 
-    if (typeof itemName !== 'string') {
-        return res.status(400).json({ message: 'Invalid query parameter: item (expected string)' });
+app.get('/market-board-current', async (req, res) => {
+    const { worldDcRegion, itemId } = req.query;
+  
+    if (!worldDcRegion || !itemId) {
+      return res.status(400).json({ message: 'Missing required parameters: worldDcRegion and itemId' });
+    }
+  
+    try {
+      const baseUrl = 'https://universalis.app/api/v2';
+      const url = `${baseUrl}/${worldDcRegion}/${itemId}`;
+  
+      const response = await axios.get(url);
+  
+      if (response.data) {
+        res.json(response.data);
+      } else {
+        res.status(404).json({ message: 'No data found for the requested items.' });
+      }
+    } catch (error) {
+      console.error('Error fetching market board data:', error);
+      if (error.response) {
+        res.status(error.response.status).json({ message: error.response.data.message || 'Unknown error' });
+      } else if (error.request) {
+        res.status(500).json({ message: 'No response from Universalis API server' });
+      } else {
+        res.status(500).json({ message: 'An unexpected error occurred' });
+      }
+    }
+  });
+  
+  app.get('/market-board-history', async (req, res) => {
+    const { worldDcRegion, itemId, entriesWithin } = req.query;
+
+    if (!worldDcRegion || !itemId) {
+        return res.status(400).json({ message: 'Missing required parameters: worldDcRegion and itemId' });
     }
 
     try {
-        const response = await axios.get('https://beta.xivapi.com/api/1/search', {
-            params: {
-                query: `Name~"${itemName}"`,
-                sheets: 'Item',
-            },
-            headers: {
-                Authorization: `Bearer ${xivApiPrivateKey}`,
-            },
-        });
+        const baseUrl = 'https://universalis.app/api/v2/history';
+        let url = `${baseUrl}/${worldDcRegion}/${itemId}`;
 
-        // console.log("Full XIV API Response:", response);
-        // console.log("XIV API Response Data:", response.data);
-        // console.log("XIV API Results:", response.data.results);
+        const params = new URLSearchParams();
+        if (entriesWithin) {
+            params.append('entriesWithin', entriesWithin.toString());
+        }
 
-        if (response.data && response.data.results && response.data.results.length > 0) {
-            const itemFields = response.data.results.map(result => result.fields);
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
 
-            res.json(itemFields);
+        const response = await axios.get(url);
+
+        if (response.data && response.data.entries && response.data.entries.length > 0) {
+            res.json(response.data);
+        } else if (response.data){
+            res.json({ ...response.data, message: 'No history data found within the specified time range.' });
         } else {
-            res.status(404).json({ message: 'No items found matching your search.' });
+          res.status(404).json({ message: 'No history data found for the requested item.' });
         }
     } catch (error) {
-        console.error('Error fetching data from XIVAPI:', error);
+        console.error('Error fetching market board history:', error);
         if (error.response) {
-            console.error('XIVAPI Response Data:', error.response.data);
-            res.status(error.response.status).json({ message: `XIVAPI Error: ${error.response.status} - ${error.response.data.Message || error.response.data.error || 'Unknown error'}` });
+            res.status(error.response.status).json({ message: error.response.data.message || 'Unknown error' });
         } else if (error.request) {
-            res.status(500).json({ message: 'No response from XIVAPI server' });
+            res.status(500).json({ message: 'No response from Universalis API server' });
         } else {
             res.status(500).json({ message: 'An unexpected error occurred' });
         }
