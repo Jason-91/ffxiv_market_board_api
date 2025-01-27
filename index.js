@@ -29,13 +29,12 @@ app.get('/items', async (req, res) => {
       });
   
       if (response.data && response.data.results && response.data.results.length > 0) {
-        const itemResults = response.data.results.map(result => ({
-          itemId: result.row_id,
-          ...result.fields,
-        }));
+        const itemResults = response.data.results.map(result => {
+            return Object.assign({ itemId: result.row_id }, result.fields);
+        });
         console.log(itemResults);
         res.json(itemResults);
-      } else {
+    } else {
         res.status(404).json({ message: 'No items found matching your search.' });
       }
     } catch (error) {
